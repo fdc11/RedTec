@@ -59,11 +59,31 @@ goto start_and_open
 
 :start_and_open
 echo.
+echo [*] Verificando / Creando base de datos (npx sequelize-cli db:create)...
+call npx sequelize-cli db:create >nul 2>&1
+
+echo [*] Aplicando migraciones de tablas si hacen falta...
+call npx sequelize-cli db:migrate >nul 2>&1
+
+echo.
 echo [*] Abriendo la aplicacion en tu navegador...
 start http://localhost:3000/index.html
-echo [*] Iniciando el servidor RedTec con nodemon (Ctrl+C para detener)...
+echo [*] Iniciando el servidor RedTec...
 echo.
 call npm run dev
+if errorlevel 1 (
+    echo.
+    echo =====================================================================
+    echo [!] ERROR AL INICIAR EL SERVIDOR
+    echo =====================================================================
+    echo Posibles causas en esta computadora:
+    echo  1. MySQL NO esta encendido. Si usas XAMPP, abrelo y dale 'Start' a MySQL.
+    echo  2. La contrasena de MySQL en tu archivo .env no coincide.
+    echo     (En XAMPP la contrasena suele ser vacia: DB_PASSWORD= )
+    echo  3. Faltan datos en la base de datos. Ejecuta la opcion 2 del menu.
+    echo =====================================================================
+    echo.
+)
 pause
 exit /b 0
 
