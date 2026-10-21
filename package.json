@@ -10,7 +10,8 @@
     "migrate:undo": "npx sequelize-cli db:migrate:undo:all",
     "seed": "npx sequelize-cli db:seed:all",
     "seed:undo": "npx sequelize-cli db:seed:undo:all",
-    "setup:db": "npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all"
+    "setup:db": "npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all",
+    "test": "node test_api.js"
   },
   "keywords": [
     "express",

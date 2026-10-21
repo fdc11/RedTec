@@ -101,7 +101,7 @@ app.use((err, req, res, next) => {
 });
 
 // Inicio del servidor y verificación de conexión a MySQL
-if (process.env.NODE_ENV !== 'test') {
+if (require.main === module) {
   sequelize
     .authenticate()
     .then(() => {
