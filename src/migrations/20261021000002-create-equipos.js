@@ -1,6 +1,11 @@
 'use strict';
 
-/** @type {import('sequelize-cli').Migration} */
+/**
+ * Migración para la tabla 'Equipos'.
+ * Incluye la columna requerida 'descripcion' y ENUM de estados válidos.
+ *
+ * @type {import('sequelize-cli').Migration}
+ */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable('Equipos', {
@@ -11,12 +16,16 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       nombre: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(100),
         allowNull: false
       },
       categoria: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(50),
         allowNull: false
+      },
+      descripcion: {
+        type: Sequelize.TEXT,
+        allowNull: true
       },
       estado: {
         type: Sequelize.ENUM('Disponible', 'Prestado', 'En mantenimiento'),
@@ -25,13 +34,11 @@ module.exports = {
       },
       createdAt: {
         allowNull: false,
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        type: Sequelize.DATE
       },
       updatedAt: {
         allowNull: false,
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        type: Sequelize.DATE
       }
     });
   },

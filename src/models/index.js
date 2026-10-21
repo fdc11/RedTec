@@ -1,16 +1,7 @@
 const { Sequelize } = require('sequelize');
-const configData = require('../config/database');
+const sequelize = require('../config/db');
 
-const env = process.env.NODE_ENV || 'development';
-const config = configData[env];
-
-const sequelize = new Sequelize(
-  config.database,
-  config.username,
-  config.password,
-  config
-);
-
+// Inicialización de modelos pasando la instancia configurada de Sequelize
 const Usuario = require('./Usuario')(sequelize);
 const Equipo = require('./Equipo')(sequelize);
 const Prestamo = require('./Prestamo')(sequelize);
@@ -21,7 +12,7 @@ const db = {
   Prestamo
 };
 
-// Ejecutar asociaciones de cada modelo
+// Ejecución de las asociaciones declaradas en cada modelo
 Object.keys(db).forEach((modelName) => {
   if (db[modelName].associate) {
     db[modelName].associate(db);

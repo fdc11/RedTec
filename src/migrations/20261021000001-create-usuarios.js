@@ -1,6 +1,12 @@
 'use strict';
 
-/** @type {import('sequelize-cli').Migration} */
+/**
+ * Migración para la tabla 'Usuarios'.
+ * REGLA DURA: Cero SQL en strings o llamadas a sequelize.literal.
+ * Todo cambio de estructura se gestiona exclusivamente por la API del ORM (queryInterface).
+ *
+ * @type {import('sequelize-cli').Migration}
+ */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable('Usuarios', {
@@ -11,16 +17,16 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       nombre: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(100),
         allowNull: false
       },
       email: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(150),
         allowNull: false,
         unique: true
       },
       password: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(255),
         allowNull: false
       },
       rol: {
@@ -30,13 +36,11 @@ module.exports = {
       },
       createdAt: {
         allowNull: false,
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        type: Sequelize.DATE
       },
       updatedAt: {
         allowNull: false,
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        type: Sequelize.DATE
       }
     });
   },

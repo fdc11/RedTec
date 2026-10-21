@@ -1,282 +1,249 @@
-const { Op } = require('sequelize');
 const { sequelize, Prestamo, Equipo, Usuario } = require('../models');
+const asyncHandler = require('../utils/asyncHandler');
+const AppError = require('../utils/AppError');
 
 /**
- * Solicitar un nuevo préstamo
- * Flujo:
- * 1. Transacción gestionada en base de datos.
- * 2. Bloqueo pesimista de fila (LOCK.UPDATE) para evitar que dos usuarios tomen el mismo equipo.
- * 3. Validación de estado ('Disponible').
- * 4. Registro del préstamo y actualización del equipo a 'Prestado'.
+ * Solicitar un nuevo préstamo.
+ *
+ * Flujo de ejecución bajo transacción ACID y bloqueo pesimista:
+ * 1. Inicia sequelize.transaction.
+ * 2. Bloquea la fila del Usuario (lock: t.LOCK.UPDATE) para serializar solicitudes concurrentes del mismo usuario.
+ * 3. REVALIDA el límite de préstamos dentro de la transacción para evitar race conditions.
+ * 4. Bloquea la fila del Equipo (lock: t.LOCK.UPDATE) para evitar que dos usuarios tomen el mismo equipo simultáneamente.
+ * 5. Verifica que el equipo esté 'Disponible' (si no, 409 Conflict).
+ * 6. Crea el registro de Prestamo.
+ * 7. Actualiza el estado del equipo a 'Prestado'.
+ * 8. Commit de la transacción. Si ocurre cualquier error, rollback automático.
  */
-const solicitarPrestamo = async (req, res) => {
-  try {
-    const { equipoId, fechaDevolucionEsperada } = req.body;
-    const usuarioId = req.usuario.id;
+const solicitarPrestamo = asyncHandler(async (req, res) => {
+  const { equipoId, fechaDevolucionEsperada } = req.body;
+  const usuarioId = req.usuario.id;
 
-    const resultado = await sequelize.transaction(async (t) => {
-      // Bloqueo de la fila del equipo para garantizar concurrencia segura
-      const equipo = await Equipo.findByPk(equipoId, {
-        transaction: t,
-        lock: t.LOCK.UPDATE
-      });
+  const resultado = await sequelize.transaction(async (t) => {
+    // 1. Bloqueo pesimista de la fila del Usuario
+    const usuario = await Usuario.findByPk(usuarioId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
 
-      if (!equipo) {
-        const error = new Error(`El equipo con ID ${equipoId} no existe.`);
-        error.statusCode = 404;
-        throw error;
-      }
+    if (!usuario) {
+      throw new AppError('Usuario no encontrado.', 404);
+    }
 
-      if (equipo.estado !== 'Disponible') {
-        const error = new Error(
-          `El equipo '${equipo.nombre}' no se encuentra disponible para préstamo (estado actual: ${equipo.estado}).`
-        );
-        error.statusCode = 409;
-        throw error;
-      }
-
-      // Crear el registro del préstamo
-      const nuevoPrestamo = await Prestamo.create(
-        {
+    // 2. Revalidación atómica del límite dentro de la transacción (exclusivo para usuarios regulares)
+    if (usuario.rol === 'usuario') {
+      const prestamosActivos = await Prestamo.count({
+        where: {
           usuarioId,
-          equipoId,
-          fechaPrestamo: new Date(),
-          fechaDevolucionEsperada: new Date(fechaDevolucionEsperada),
           fechaDevolucionReal: null
         },
-        { transaction: t }
-      );
+        transaction: t
+      });
 
-      // Cambiar estado del equipo a 'Prestado'
+      if (prestamosActivos >= 2) {
+        throw new AppError(
+          'Límite de préstamos alcanzado: Ya posee 2 equipos prestados simultáneamente.',
+          409
+        );
+      }
+    }
+
+    // 3. Bloqueo pesimista de la fila del Equipo
+    const equipo = await Equipo.findByPk(equipoId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    if (!equipo) {
+      throw new AppError(`El equipo con ID ${equipoId} no existe.`, 404);
+    }
+
+    // 4. Verificación de disponibilidad del equipo
+    if (equipo.estado !== 'Disponible') {
+      throw new AppError(
+        `El equipo '${equipo.nombre}' no se encuentra disponible para préstamo (estado actual: ${equipo.estado}).`,
+        409
+      );
+    }
+
+    // 5. Creación del préstamo
+    const nuevoPrestamo = await Prestamo.create(
+      {
+        usuarioId,
+        equipoId,
+        fechaPrestamo: new Date(),
+        fechaDevolucionEsperada: new Date(fechaDevolucionEsperada),
+        fechaDevolucionReal: null
+      },
+      { transaction: t }
+    );
+
+    // 6. Actualización atómica del inventario
+    await equipo.update(
+      { estado: 'Prestado' },
+      { transaction: t }
+    );
+
+    return {
+      prestamo: nuevoPrestamo,
+      equipo
+    };
+  });
+
+  return res.status(201).json({
+    ok: true,
+    data: {
+      id: resultado.prestamo.id,
+      usuarioId: resultado.prestamo.usuarioId,
+      equipoId: resultado.prestamo.equipoId,
+      equipoNombre: resultado.equipo.nombre,
+      fechaPrestamo: resultado.prestamo.fechaPrestamo,
+      fechaDevolucionEsperada: resultado.prestamo.fechaDevolucionEsperada,
+      fechaDevolucionReal: resultado.prestamo.fechaDevolucionReal
+    }
+  });
+});
+
+/**
+ * Registrar la devolución de un equipo en préstamo.
+ *
+ * Flujo transaccional:
+ * 1. Bloquea la fila del préstamo con lock: t.LOCK.UPDATE.
+ * 2. Verifica autorización: solo el titular del préstamo o un Administrador pueden devolverlo (403).
+ * 3. Si el préstamo ya estaba devuelto (fechaDevolucionReal !== null), responde 409 Conflict.
+ * 4. Actualiza fechaDevolucionReal con la marca de tiempo actual.
+ * 5. Bloquea y actualiza el equipo correspondiente a estado 'Disponible'.
+ */
+const devolverPrestamo = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const usuario = req.usuario;
+
+  const resultado = await sequelize.transaction(async (t) => {
+    const prestamo = await Prestamo.findByPk(id, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+      include: [{ model: Equipo, as: 'equipo' }]
+    });
+
+    if (!prestamo) {
+      throw new AppError(`Préstamo con ID ${id} no encontrado.`, 404);
+    }
+
+    // Verificación de propiedad o privilegios de administrador
+    if (usuario.rol !== 'admin' && prestamo.usuarioId !== usuario.id) {
+      throw new AppError('No tiene autorización para devolver un préstamo de otro usuario.', 403);
+    }
+
+    // REGLA DURA: Si ya estaba devuelto, responde 409 Conflict
+    if (prestamo.fechaDevolucionReal !== null) {
+      throw new AppError('Conflicto: Este préstamo ya fue devuelto previamente.', 409);
+    }
+
+    const ahora = new Date();
+    await prestamo.update(
+      { fechaDevolucionReal: ahora },
+      { transaction: t }
+    );
+
+    // Restauración de disponibilidad en el inventario
+    const equipo = await Equipo.findByPk(prestamo.equipoId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    if (equipo) {
       await equipo.update(
-        { estado: 'Prestado' },
+        { estado: 'Disponible' },
         { transaction: t }
       );
-
-      return {
-        prestamo: nuevoPrestamo,
-        equipo
-      };
-    });
-
-    return res.status(201).json({
-      ok: true,
-      mensaje: `Préstamo del equipo '${resultado.equipo.nombre}' otorgado exitosamente.`,
-      prestamo: {
-        id: resultado.prestamo.id,
-        usuarioId: resultado.prestamo.usuarioId,
-        equipoId: resultado.prestamo.equipoId,
-        equipoNombre: resultado.equipo.nombre,
-        fechaPrestamo: resultado.prestamo.fechaPrestamo,
-        fechaDevolucionEsperada: resultado.prestamo.fechaDevolucionEsperada
-      }
-    });
-  } catch (error) {
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({
-        ok: false,
-        error: error.message
-      });
     }
 
-    console.error('Error al procesar solicitud de préstamo:', error);
-    return res.status(500).json({
-      ok: false,
-      error: 'Error interno del servidor al procesar el préstamo.'
-    });
-  }
-};
+    return {
+      prestamo,
+      equipo
+    };
+  });
+
+  return res.status(200).json({
+    ok: true,
+    data: {
+      id: resultado.prestamo.id,
+      usuarioId: resultado.prestamo.usuarioId,
+      equipoId: resultado.prestamo.equipoId,
+      fechaPrestamo: resultado.prestamo.fechaPrestamo,
+      fechaDevolucionEsperada: resultado.prestamo.fechaDevolucionEsperada,
+      fechaDevolucionReal: resultado.prestamo.fechaDevolucionReal,
+      equipo: {
+        id: resultado.equipo?.id,
+        nombre: resultado.equipo?.nombre,
+        estado: resultado.equipo?.estado
+      }
+    }
+  });
+});
 
 /**
- * Registrar la devolución de un equipo
+ * Listar préstamos registrados.
+ *
+ * REGLA DURA:
+ * El administrador visualiza todos los préstamos de la plataforma.
+ * El usuario común visualiza únicamente los suyos.
  */
-const devolverPrestamo = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const usuario = req.usuario;
+const listarPrestamos = asyncHandler(async (req, res) => {
+  const where = {};
 
-    const resultado = await sequelize.transaction(async (t) => {
-      const prestamo = await Prestamo.findByPk(id, {
-        transaction: t,
-        lock: t.LOCK.UPDATE,
-        include: [{ model: Equipo, as: 'equipo' }]
-      });
+  if (req.usuario.rol !== 'admin') {
+    where.usuarioId = req.usuario.id;
+  }
 
-      if (!prestamo) {
-        const error = new Error(`Préstamo con ID ${id} no encontrado.`);
-        error.statusCode = 404;
-        throw error;
-      }
-
-      // Solo el usuario titular del préstamo o un Administrador pueden devolverlo
-      if (usuario.rol !== 'admin' && prestamo.usuarioId !== usuario.id) {
-        const error = new Error('No tienes permiso para devolver un préstamo de otro usuario.');
-        error.statusCode = 403;
-        throw error;
-      }
-
-      if (prestamo.fechaDevolucionReal !== null) {
-        const error = new Error(
-          `Este préstamo ya fue devuelto previamente el ${prestamo.fechaDevolucionReal.toLocaleString()}.`
-        );
-        error.statusCode = 400;
-        throw error;
-      }
-
-      const ahora = new Date();
-      await prestamo.update(
-        { fechaDevolucionReal: ahora },
-        { transaction: t }
-      );
-
-      // Regresar el equipo a estado 'Disponible'
-      const equipo = await Equipo.findByPk(prestamo.equipoId, {
-        transaction: t,
-        lock: t.LOCK.UPDATE
-      });
-
-      if (equipo) {
-        await equipo.update(
-          { estado: 'Disponible' },
-          { transaction: t }
-        );
-      }
-
-      return { prestamo, equipo };
-    });
-
-    return res.json({
-      ok: true,
-      mensaje: `Equipo '${resultado.equipo?.nombre || ''}' devuelto exitosamente. El inventario ha sido actualizado a Disponible.`,
-      prestamo: resultado.prestamo
-    });
-  } catch (error) {
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({
-        ok: false,
-        error: error.message
-      });
+  const includeModels = [
+    {
+      model: Equipo,
+      as: 'equipo',
+      attributes: ['id', 'nombre', 'categoria', 'estado']
     }
+  ];
 
-    console.error('Error al registrar devolución:', error);
-    return res.status(500).json({
-      ok: false,
-      error: 'Error interno del servidor al registrar la devolución.'
+  if (req.usuario.rol === 'admin') {
+    includeModels.push({
+      model: Usuario,
+      as: 'usuario',
+      attributes: ['id', 'nombre', 'email']
     });
   }
-};
 
-/**
- * Listar los préstamos del usuario autenticado
- */
-const listarMisPrestamos = async (req, res) => {
-  try {
-    const usuarioId = req.usuario.id;
-    const ahora = new Date();
+  const prestamos = await Prestamo.findAll({
+    where,
+    include: includeModels,
+    order: [['fechaPrestamo', 'DESC']]
+  });
 
-    const prestamos = await Prestamo.findAll({
-      where: { usuarioId },
-      include: [
-        {
-          model: Equipo,
-          as: 'equipo',
-          attributes: ['id', 'nombre', 'categoria', 'estado']
-        }
-      ],
-      order: [['fechaPrestamo', 'DESC']]
-    });
+  const ahora = new Date();
+  const data = prestamos.map((p) => {
+    const activo = p.fechaDevolucionReal === null;
+    const enMora = activo && new Date(p.fechaDevolucionEsperada) < ahora;
+    return {
+      id: p.id,
+      usuarioId: p.usuarioId,
+      equipoId: p.equipoId,
+      fechaPrestamo: p.fechaPrestamo,
+      fechaDevolucionEsperada: p.fechaDevolucionEsperada,
+      fechaDevolucionReal: p.fechaDevolucionReal,
+      activo,
+      enMora,
+      equipo: p.equipo,
+      ...(p.usuario ? { usuario: p.usuario } : {})
+    };
+  });
 
-    const prestamosFormateados = prestamos.map((p) => {
-      const activo = p.fechaDevolucionReal === null;
-      const enMora = activo && new Date(p.fechaDevolucionEsperada) < ahora;
-      return {
-        ...p.toJSON(),
-        activo,
-        enMora
-      };
-    });
-
-    return res.json({
-      ok: true,
-      total: prestamosFormateados.length,
-      prestamos: prestamosFormateados
-    });
-  } catch (error) {
-    console.error('Error al listar préstamos del usuario:', error);
-    return res.status(500).json({
-      ok: false,
-      error: 'Error interno del servidor al consultar los préstamos.'
-    });
-  }
-};
-
-/**
- * Listar todos los préstamos registrados (Solo Administrador)
- */
-const listarTodosPrestamos = async (req, res) => {
-  try {
-    const { activo, mora, usuarioId, equipoId } = req.query;
-    const where = {};
-    const ahora = new Date();
-
-    if (usuarioId) where.usuarioId = usuarioId;
-    if (equipoId) where.equipoId = equipoId;
-
-    if (activo === 'true') {
-      where.fechaDevolucionReal = null;
-    } else if (activo === 'false') {
-      where.fechaDevolucionReal = { [Op.ne]: null };
-    }
-
-    if (mora === 'true') {
-      where.fechaDevolucionReal = null;
-      where.fechaDevolucionEsperada = { [Op.lt]: ahora };
-    }
-
-    const prestamos = await Prestamo.findAll({
-      where,
-      include: [
-        {
-          model: Usuario,
-          as: 'usuario',
-          attributes: ['id', 'nombre', 'email', 'rol']
-        },
-        {
-          model: Equipo,
-          as: 'equipo',
-          attributes: ['id', 'nombre', 'categoria', 'estado']
-        }
-      ],
-      order: [['fechaPrestamo', 'DESC']]
-    });
-
-    const prestamosConEstado = prestamos.map((p) => {
-      const esActivo = p.fechaDevolucionReal === null;
-      const enMora = esActivo && new Date(p.fechaDevolucionEsperada) < ahora;
-      return {
-        ...p.toJSON(),
-        activo: esActivo,
-        enMora
-      };
-    });
-
-    return res.json({
-      ok: true,
-      total: prestamosConEstado.length,
-      prestamos: prestamosConEstado
-    });
-  } catch (error) {
-    console.error('Error al listar todos los préstamos:', error);
-    return res.status(500).json({
-      ok: false,
-      error: 'Error interno del servidor al consultar los préstamos.'
-    });
-  }
-};
+  return res.status(200).json({
+    ok: true,
+    data
+  });
+});
 
 module.exports = {
   solicitarPrestamo,
   devolverPrestamo,
-  listarMisPrestamos,
-  listarTodosPrestamos
+  listarPrestamos
 };

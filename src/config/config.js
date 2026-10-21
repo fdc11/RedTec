@@ -1,12 +1,16 @@
 require('dotenv').config();
 
+/**
+ * Configuración de entornos de base de datos para Sequelize CLI.
+ * Lee las credenciales estrictamente desde las variables de entorno (.env).
+ */
 module.exports = {
   development: {
-    username: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'root',
-    database: process.env.DB_NAME || 'redtec_db',
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: process.env.DB_PORT || 3306,
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT, 10) || 3306,
     dialect: 'mysql',
     logging: false,
     define: {
@@ -15,11 +19,11 @@ module.exports = {
     }
   },
   test: {
-    username: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'root',
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
     database: (process.env.DB_NAME || 'redtec_db') + '_test',
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: process.env.DB_PORT || 3306,
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT, 10) || 3306,
     dialect: 'mysql',
     logging: false
   },
@@ -28,7 +32,7 @@ module.exports = {
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
+    port: parseInt(process.env.DB_PORT, 10) || 3306,
     dialect: 'mysql',
     logging: false,
     pool: {

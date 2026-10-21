@@ -1,16 +1,15 @@
 {
   "name": "redtec-api",
   "version": "1.0.0",
-  "description": "API REST segura y escalable para la gestión de inventario y préstamos de equipos de RedTec",
-  "main": "src/app.js",
+  "description": "API REST para RedTec: inventario y préstamos de equipos comunitarios",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
-    "migrate": "npx sequelize-cli db:migrate",
-    "migrate:undo": "npx sequelize-cli db:migrate:undo:all",
-    "seed": "npx sequelize-cli db:seed:all",
-    "seed:undo": "npx sequelize-cli db:seed:undo:all",
-    "setup:db": "npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:migrate": "npx sequelize-cli db:migrate",
+    "db:migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
+    "db:seed": "npx sequelize-cli db:seed:all",
+    "db:reset": "npm run db:migrate:undo:all && npm run db:migrate && npm run db:seed",
     "test": "node test_api.js"
   },
   "keywords": [

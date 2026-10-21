@@ -1,37 +1,49 @@
 const { Router } = require('express');
 const prestamosController = require('../controllers/prestamos.controller');
-const authMiddleware = require('../middlewares/auth.middleware');
-const moraMiddleware = require('../middlewares/mora.middleware');
-const limiteMiddleware = require('../middlewares/limite.middleware');
-const { soloAdmin } = require('../middlewares/role.middleware');
-const { validarSolicitudPrestamo } = require('../middlewares/validator.middleware');
+const { verificarToken } = require('../middlewares/auth.middleware');
+const { verificarMora } = require('../middlewares/mora.middleware');
+const { verificarLimite } = require('../middlewares/limite.middleware');
+const { validarPrestamo, validarIdParam } = require('../middlewares/validator.middleware');
 
 const router = Router();
 
 /**
- * Cadena de middlewares requerida por la lógica de negocio para crear préstamos:
- * 1. authMiddleware: ¿quién eres?
- * 2. validarSolicitudPrestamo: ¿los datos vienen bien y fecha a futuro?
- * 3. moraMiddleware: ¿tienes préstamos vencidos? -> 403 Forbidden
- * 4. limiteMiddleware: ¿ya tienes 2 equipos prestados? -> 400 Bad Request
- * 5. prestamosController.solicitarPrestamo: transacción y bloqueo pesimista
+ * CADENA DE MIDDLEWARES EN POST /api/prestamos (ORDEN EXACTO OBLIGATORIO):
+ * 1. verificarToken: valida JWT, verifica expiración y deja req.usuario en la petición.
+ * 2. validarPrestamo (express-validator): equipoId entero positivo; fechaDevolucionEsperada válida, futura y máximo MAX_DIAS_PRESTAMO.
+ * 3. verificarMora: Prestamo.count donde usuarioId = req.usuario.id, fechaDevolucionReal null y fechaDevolucionEsperada < ahora. Responde 403.
+ * 4. verificarLimite: solo para rol 'usuario'. Cuenta préstamos activos; si ya tiene 2, responde 409.
+ * 5. Controlador (solicitarPrestamo): transacción pesimista con bloqueo de fila en Usuario y Equipo, revalidación de cupo y cambio atómico a 'Prestado'.
  */
 router.post(
   '/',
-  authMiddleware,
-  validarSolicitudPrestamo,
-  moraMiddleware,
-  limiteMiddleware,
+  verificarToken,
+  validarPrestamo,
+  verificarMora,
+  verificarLimite,
   prestamosController.solicitarPrestamo
 );
 
-// Registrar devolución
-router.put('/:id/devolver', authMiddleware, prestamosController.devolverPrestamo);
+/**
+ * Registrar devolución de préstamo (PUT /api/prestamos/:id/devolver):
+ * Accesible solo para el usuario dueño del préstamo o un Administrador.
+ * Transacción con bloqueo de fila: si ya estaba devuelto responde 409 Conflict.
+ */
+router.put(
+  '/:id/devolver',
+  verificarToken,
+  validarIdParam,
+  prestamosController.devolverPrestamo
+);
 
-// Consultar préstamos propios del usuario
-router.get('/mis-prestamos', authMiddleware, prestamosController.listarMisPrestamos);
-
-// Consultar todos los préstamos del centro (Solo Administrador)
-router.get('/', authMiddleware, soloAdmin, prestamosController.listarTodosPrestamos);
+/**
+ * Listar préstamos (GET /api/prestamos):
+ * Si es Administrador ve todos los préstamos del centro; si es Usuario común ve únicamente los suyos.
+ */
+router.get(
+  '/',
+  verificarToken,
+  prestamosController.listarPrestamos
+);
 
 module.exports = router;

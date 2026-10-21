@@ -1,14 +1,17 @@
-const app = require('./src/app');
+require('dotenv').config();
 const http = require('http');
+const app = require('./src/app');
+const { sequelize } = require('./src/models');
 
-async function testSuite() {
+async function testSuiteCompleta() {
+  console.log('================================================================');
+  console.log('🚀 SUITE COMPLETA DE PRUEBAS DE INTEGRACIÓN - REDTEC API REST');
+  console.log('================================================================\n');
+
   const server = http.createServer(app);
-  await new Promise((resolve) => server.listen(3001, resolve));
-  const baseUrl = 'http://localhost:3001';
+  await new Promise((resolve) => server.listen(3003, resolve));
+  const baseUrl = 'http://localhost:3003';
 
-  console.log('--- INICIANDO BATERÍA DE PRUEBAS AUTOMATIZADAS REDTEC ---');
-
-  // Helper fetch
   async function request(path, options = {}) {
     const res = await fetch(`${baseUrl}${path}`, {
       ...options,
@@ -17,114 +20,185 @@ async function testSuite() {
         ...(options.headers || {})
       }
     });
-    const data = await res.json().catch(() => ({}));
-    return { status: res.status, data };
+    const body = await res.json().catch(() => ({}));
+    return { status: res.status, body };
+  }
+
+  let exitos = 0;
+  let fallos = 0;
+
+  function assert(condicion, descripcion, detalle = '') {
+    if (condicion) {
+      console.log(`✅ [PASS] ${descripcion}`);
+      exitos++;
+    } else {
+      console.error(`❌ [FAIL] ${descripcion} - Detalle: ${detalle}`);
+      fallos++;
+    }
   }
 
   try {
-    // 1. Health
+    // 1. Health Check
     const health = await request('/api/health');
-    console.log(`[1] Health Check: Status ${health.status} (ok: ${health.data.ok})`);
+    assert(health.status === 200 && health.body.ok === true, 'Health check responde 200 OK');
 
     // 2. Logins
     const loginAdmin = await request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'admin@redtec.org', password: 'Admin123!' })
     });
-    console.log(`[2] Login Admin: Status ${loginAdmin.status} (rol: ${loginAdmin.data.usuario?.rol})`);
-    const tokenAdmin = loginAdmin.data.token;
+    const tokenAdmin = loginAdmin.body.data?.token;
 
     const loginCarlos = await request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'carlos@redtec.org', password: 'Usuario123!' })
     });
-    console.log(`[3] Login Carlos: Status ${loginCarlos.status} (rol: ${loginCarlos.data.usuario?.rol})`);
-    const tokenCarlos = loginCarlos.data.token;
+    const tokenCarlos = loginCarlos.body.data?.token;
 
     const loginLucia = await request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'lucia@redtec.org', password: 'Usuario123!' })
     });
-    console.log(`[4] Login Lucia (Morosa): Status ${loginLucia.status} (rol: ${loginLucia.data.usuario?.rol})`);
-    const tokenLucia = loginLucia.data.token;
+    const tokenLucia = loginLucia.body.data?.token;
 
-    // 3. Regla de seguridad en Registro (rol forzado a 'usuario')
-    const reg = await request('/api/auth/registro', {
+    const loginMarcos = await request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'marcos@redtec.org', password: 'Usuario123!' })
+    });
+    const tokenMarcos = loginMarcos.body.data?.token;
+
+    assert(tokenAdmin && tokenCarlos && tokenLucia && tokenMarcos, 'Autenticación exitosa para todos los roles de prueba');
+
+    // 3. Criterio 7: Exclusión de password
+    assert(
+      !loginAdmin.body.data?.usuario?.password && !loginCarlos.body.data?.usuario?.password,
+      'Criterio 7: El hash de password no se expone en ninguna respuesta'
+    );
+
+    // 4. Criterio 6: Registro forzado a usuario
+    const reg = await request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({
-        nombre: 'Intento Hack Admin',
-        email: `hack.${Date.now()}@redtec.org`,
+        nombre: 'Nuevo Alumno',
+        email: `alumno_${Date.now()}@redtec.org`,
         password: 'Password123!',
-        rol: 'admin' // Intentando inyectar admin
+        rol: 'admin'
       })
     });
-    console.log(`[5] Registro rol forzado a usuario: Status ${reg.status} (rol resultante: ${reg.data.usuario?.rol})`);
-    if (reg.data.usuario?.rol !== 'usuario') throw new Error('Fallo: Rol no fue forzado a usuario');
+    assert(
+      reg.status === 201 && reg.body.data?.usuario?.rol === 'usuario',
+      'Criterio 6: Registro ignora rol "admin" del body y asigna estrictamente "usuario"'
+    );
 
-    // 4. Escenario 4: RBAC - Usuario regular intenta borrar equipo
-    const deleteRbac = await request('/api/equipos/1', {
+    // 5. Criterio 2: Sanción automática por mora → 403
+    const fechaFutura = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const reqMora = await request('/api/prestamos', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenLucia}` },
+      body: JSON.stringify({ equipoId: 3, fechaDevolucionEsperada: fechaFutura })
+    });
+    assert(
+      reqMora.status === 403,
+      'Criterio 2: Usuario con préstamo vencido (Lucía) es sancionado con 403 Forbidden'
+    );
+
+    // 6. Criterio 1: Límite de 2 préstamos activos para usuario regular → 409
+    const reqLimite = await request('/api/prestamos', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenMarcos}` },
+      body: JSON.stringify({ equipoId: 3, fechaDevolucionEsperada: fechaFutura })
+    });
+    assert(
+      reqLimite.status === 409,
+      'Criterio 1: Usuario con 2 préstamos activos (Marcos) recibe 409 Conflict al pedir el 3.º'
+    );
+
+    // 7. Criterio 3: Equipos no disponibles (Mantenimiento o Prestado) → 409
+    const reqMant = await request('/api/prestamos', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenCarlos}` },
+      body: JSON.stringify({ equipoId: 6, fechaDevolucionEsperada: fechaFutura }) // Equipo 6: Mantenimiento
+    });
+    assert(
+      reqMant.status === 409,
+      'Criterio 3A: Solicitud de equipo en mantenimiento responde 409 Conflict'
+    );
+
+    const reqPrestado = await request('/api/prestamos', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenCarlos}` },
+      body: JSON.stringify({ equipoId: 4, fechaDevolucionEsperada: fechaFutura }) // Equipo 4: Prestado
+    });
+    assert(
+      reqPrestado.status === 409,
+      'Criterio 3B: Solicitud de equipo ya prestado responde 409 Conflict'
+    );
+
+    // 8. Criterio 4: RBAC estricto en eliminación de equipos → 403
+    const reqDeleteRbac = await request('/api/equipos/1', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${tokenCarlos}` }
     });
-    console.log(`[6] RBAC Carlos intenta DELETE /api/equipos/1: Status ${deleteRbac.status} (Esperado: 403)`);
+    assert(
+      reqDeleteRbac.status === 403,
+      'Criterio 4: Usuario regular intentando DELETE de equipo recibe 403 Forbidden'
+    );
 
-    // 5. Escenario 2: Mora Automática - Lucia intenta pedir préstamo
-    const fechaFutura = new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString();
-    const moraTest = await request('/api/prestamos', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${tokenLucia}` },
-      body: JSON.stringify({ equipoId: 1, fechaDevolucionEsperada: fechaFutura })
+    // 9. Criterio 5: Concurrencia y Bloqueo Pesimista
+    // Equipo 5 ("Micrófono Inalámbrico Shure SM58") está disponible
+    const [p1, p2] = await Promise.all([
+      request('/api/prestamos', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokenCarlos}` },
+        body: JSON.stringify({ equipoId: 5, fechaDevolucionEsperada: fechaFutura })
+      }),
+      request('/api/prestamos', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokenAdmin}` },
+        body: JSON.stringify({ equipoId: 5, fechaDevolucionEsperada: fechaFutura })
+      })
+    ]);
+    const concurrenciaGanoUno = (p1.status === 201 && p2.status === 409) || (p2.status === 201 && p1.status === 409);
+    assert(
+      concurrenciaGanoUno,
+      'Criterio 5: Dos solicitudes concurrentes por el mismo equipo: exactamente 1 ganó (201) y la otra recibió 409'
+    );
+
+    // 10. Devolución de préstamo y rechazo de devolución doble
+    const prestamoExitosoId = p1.status === 201 ? p1.body.data?.id : p2.body.data?.id;
+    const dev = await request(`/api/prestamos/${prestamoExitosoId}/devolver`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenCarlos}` }
     });
-    console.log(`[7] Sanción Mora Lucia intenta pedir equipo: Status ${moraTest.status} (Esperado: 403) -> Error: "${moraTest.data.error}"`);
+    assert(
+      dev.status === 200,
+      'Devolución de préstamo por el titular se procesa exitosamente (200 OK)'
+    );
 
-    // 6. Escenario 3: Equipo en Mantenimiento o Prestado
-    const mantTest = await request('/api/prestamos', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${tokenAdmin}` },
-      body: JSON.stringify({ equipoId: 6, fechaDevolucionEsperada: fechaFutura }) // Equipo 6 está En mantenimiento
+    const devDoble = await request(`/api/prestamos/${prestamoExitosoId}/devolver`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenCarlos}` }
     });
-    console.log(`[8] Pedir equipo en mantenimiento (ID 6): Status ${mantTest.status} (Esperado: 409) -> Error: "${mantTest.data.error}"`);
+    assert(
+      devDoble.status === 409,
+      'Devolver un préstamo ya devuelto responde 409 Conflict'
+    );
 
-    // 7. Escenario 1: Límite de 2 préstamos para Carlos
-    // Carlos tiene 1 préstamo en seeds (ID 3 sobre equipo 8).
-    // Pedir equipo 1 (Laptop Dell) para llegar a 2 préstamos activos:
-    const prestamoExitoso = await request('/api/prestamos', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${tokenCarlos}` },
-      body: JSON.stringify({ equipoId: 1, fechaDevolucionEsperada: fechaFutura })
-    });
-    console.log(`[9] Carlos pide 2do equipo (ID 1): Status ${prestamoExitoso.status} (Esperado: 201) -> Préstamo ID: ${prestamoExitoso.data.prestamo?.id}`);
+    console.log(`\n================================================================`);
+    console.log(`🏁 RESULTADO: ${exitos} PRUEBAS PASARON, ${fallos} FALLARON`);
+    console.log(`================================================================`);
 
-    // Ahora Carlos intenta pedir un 3er equipo (ID 2 - Lenovo):
-    const limiteTest = await request('/api/prestamos', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${tokenCarlos}` },
-      body: JSON.stringify({ equipoId: 2, fechaDevolucionEsperada: fechaFutura })
-    });
-    console.log(`[10] Carlos intenta pedir 3er equipo (Límite 2): Status ${limiteTest.status} (Esperado: 400) -> Error: "${limiteTest.data.error}"`);
-
-    // 8. Devolución de préstamo
-    if (prestamoExitoso.data.prestamo?.id) {
-      const dev = await request(`/api/prestamos/${prestamoExitoso.data.prestamo.id}/devolver`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${tokenCarlos}` }
-      });
-      console.log(`[11] Devolución de equipo: Status ${dev.status} (Esperado: 200) -> Mensaje: "${dev.data.mensaje}"`);
+    if (fallos > 0) {
+      process.exit(1);
     }
-
-    // 9. Escenario 5: Admin auditoría de préstamos
-    const todosPrestamos = await request('/api/prestamos', {
-      headers: { Authorization: `Bearer ${tokenAdmin}` }
-    });
-    console.log(`[12] Admin lista todos los préstamos: Status ${todosPrestamos.status} (Total: ${todosPrestamos.data.total})`);
-
-    console.log('\n🎉 ¡TODAS LAS PRUEBAS PASARON EXITOSAMENTE!');
   } catch (err) {
-    console.error('❌ Error en testSuite:', err);
+    console.error('❌ Error en testSuiteCompleta:', err);
+    process.exit(1);
   } finally {
     server.close();
+    await sequelize.close();
     process.exit(0);
   }
 }
 
-testSuite();
+testSuiteCompleta();

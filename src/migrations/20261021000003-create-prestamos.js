@@ -1,6 +1,13 @@
 'use strict';
 
-/** @type {import('sequelize-cli').Migration} */
+/**
+ * Migración para la tabla 'Prestamos'.
+ * Implementa claves foráneas con onDelete: 'RESTRICT'
+ * e índice compuesto en (usuarioId, fechaDevolucionReal) para optimizar
+ * las consultas de verificación de mora y límites de cupo.
+ *
+ * @type {import('sequelize-cli').Migration}
+ */
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable('Prestamos', {
@@ -32,8 +39,7 @@ module.exports = {
       },
       fechaPrestamo: {
         type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        allowNull: false
       },
       fechaDevolucionEsperada: {
         type: Sequelize.DATE,
@@ -46,18 +52,22 @@ module.exports = {
       },
       createdAt: {
         allowNull: false,
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        type: Sequelize.DATE
       },
       updatedAt: {
         allowNull: false,
-        type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        type: Sequelize.DATE
       }
+    });
+
+    // Creación explícita del índice compuesto en (usuarioId, fechaDevolucionReal)
+    await queryInterface.addIndex('Prestamos', ['usuarioId', 'fechaDevolucionReal'], {
+      name: 'idx_prestamos_usuario_devolucion_real'
     });
   },
 
   async down(queryInterface, Sequelize) {
+    // En MySQL, dropTable elimina la tabla junto con sus índices y restricciones asociadas
     await queryInterface.dropTable('Prestamos');
   }
 };

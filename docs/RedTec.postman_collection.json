@@ -1,0 +1,647 @@
+{
+  "info": {
+    "_postman_id": "b3e94582-7f12-4c23-95ad-e83fa9871142",
+    "name": "RedTec API REST - Colección Oficial",
+    "description": "Colección completa de pruebas para la API REST de RedTec (Node.js, Express, Sequelize, MySQL). Incluye todos los casos de éxito y los escenarios de error esperados (criterios de aceptación 1 al 7, token inválido y validación fallida).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "tokenAdmin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenCarlos",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenLucia",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenMarcos",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticación (Auth)",
+      "item": [
+        {
+          "name": "1.1 Login - Administrador (Guarda tokenAdmin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('tokenAdmin', json.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@redtec.org\",\n  \"password\": \"Admin123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Login - Carlos Gómez (Usuario Limpio)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('tokenCarlos', json.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"carlos@redtec.org\",\n  \"password\": \"Usuario123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Login - Lucía Silva (En Mora)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('tokenLucia', json.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"lucia@redtec.org\",\n  \"password\": \"Usuario123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.4 Login - Marcos Peña (Con 2 Préstamos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('tokenMarcos', json.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"marcos@redtec.org\",\n  \"password\": \"Usuario123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.5 Registro - Rol forzado a 'usuario' (Criterio 6)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Estudiante Demo\",\n  \"email\": \"estudiante.nuevo@redtec.org\",\n  \"password\": \"Clave123!\",\n  \"rol\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "1.6 Perfil de Usuario - GET /me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "1.7 [ERROR ESPERADO] Login con credenciales inválidas (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@redtec.org\",\n  \"password\": \"ContraseñaIncorrecta!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.8 [ERROR ESPERADO] Acceso sin token o token inválido (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer token_falso_invalido_123"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Equipos (Inventario)",
+      "item": [
+        {
+          "name": "2.1 Listar Equipos Disponibles (Filtro ?estado=Disponible)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos?estado=Disponible",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos"],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "Disponible"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.2 Obtener Equipo por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos", "1"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Crear Nuevo Equipo (Solo Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Tablet Gráfica Wacom Intuos Pro\",\n  \"categoria\": \"Audiovisual\",\n  \"descripcion\": \"Tableta digitalizadora profesional con lápiz óptico Pro Pen 2\",\n  \"estado\": \"Disponible\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos"]
+            }
+          }
+        },
+        {
+          "name": "2.4 Actualizar Equipo (Solo Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descripcion\": \"Descripción actualizada con nuevas especificaciones técnicas.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos", "1"]
+            }
+          }
+        },
+        {
+          "name": "2.5 [ERROR ESPERADO] Crear equipo con estado 'Prestado' a mano (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Equipo No Permitido\",\n  \"categoria\": \"Herramientas\",\n  \"estado\": \"Prestado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos"]
+            }
+          }
+        },
+        {
+          "name": "2.6 [ERROR ESPERADO] Criterio 4: Usuario común intenta DELETE (403)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos", "1"]
+            }
+          }
+        },
+        {
+          "name": "2.7 [ERROR ESPERADO] Admin intenta DELETE de equipo con préstamo activo (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/equipos/4",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipos", "4"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Préstamos y Devoluciones",
+      "item": [
+        {
+          "name": "3.1 Solicitud de Préstamo Exitosa (Carlos sobre Equipo 1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipoId\": 1,\n  \"fechaDevolucionEsperada\": \"2026-11-15T18:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.2 [ERROR ESPERADO] Criterio 1: Marcos (2 activos) pide un 3.º (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMarcos}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipoId\": 3,\n  \"fechaDevolucionEsperada\": \"2026-11-15T18:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.3 [ERROR ESPERADO] Criterio 2: Lucía (préstamo vencido) pide otro (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenLucia}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipoId\": 3,\n  \"fechaDevolucionEsperada\": \"2026-11-15T18:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.4 [ERROR ESPERADO] Criterio 3A: Pedir equipo 'En mantenimiento' (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipoId\": 6,\n  \"fechaDevolucionEsperada\": \"2026-11-15T18:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.5 [ERROR ESPERADO] Criterio 3B: Pedir equipo ya 'Prestado' (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipoId\": 4,\n  \"fechaDevolucionEsperada\": \"2026-11-15T18:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.6 [ERROR ESPERADO] Validación fallida - Plazo mayor a 30 días (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipoId\": 3,\n  \"fechaDevolucionEsperada\": \"2028-01-01T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.7 Devolución de Préstamo - PUT /api/prestamos/:id/devolver",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos/1/devolver",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos", "1", "devolver"]
+            }
+          }
+        },
+        {
+          "name": "3.8 [ERROR ESPERADO] Devolver préstamo ya devuelto (409)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos/1/devolver",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos", "1", "devolver"]
+            }
+          }
+        },
+        {
+          "name": "3.9 Listar Préstamos - GET /api/prestamos (Admin ve todos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        },
+        {
+          "name": "3.10 Listar Préstamos - GET /api/prestamos (Usuario solo ve los suyos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCarlos}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/prestamos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "prestamos"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

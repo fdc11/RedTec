@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RedTec - Inventario de Equipos</title>
+  <!-- Bootstrap 5 CSS desde CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- Estilos del Sistema -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+
+  <!-- Barra de Navegación Principal -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+        <i class="bi bi-cpu text-primary fs-4"></i>
+        <span>RedTec <small class="text-secondary fw-normal fs-6">| Centro Comunitario</small></span>
+      </a>
+
+      <div class="d-flex align-items-center gap-3 ms-auto">
+        <!-- Indicador de Usuario Autenticado -->
+        <div class="d-flex align-items-center gap-2 text-light small">
+          <i class="bi bi-person-circle fs-5 text-secondary"></i>
+          <div>
+            <span class="fw-semibold d-block" id="nav-user-name">Cargando...</span>
+            <span class="badge bg-secondary" id="nav-user-role">...</span>
+          </div>
+        </div>
+
+        <!-- Botón de Cerrar Sesión -->
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-logout" title="Cerrar Sesión">
+          <i class="bi bi-box-arrow-right me-1"></i> Cerrar Sesión
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Contenido Principal -->
+  <main class="container my-4 flex-grow-1">
+
+    <!-- Encabezado de Sección -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+      <div>
+        <h1 class="h3 fw-bold text-dark mb-1">Catálogo de Equipos</h1>
+        <p class="text-muted small mb-0">
+          Equipamiento disponible para préstamo comunitario. Consulta en tiempo real respaldada por bloqueos de fila.
+        </p>
+      </div>
+
+      <!-- Barra de Filtros -->
+      <div class="d-flex align-items-center gap-2">
+        <label for="filtro-estado" class="visually-hidden">Filtrar por Estado</label>
+        <select class="form-select form-select-sm" id="filtro-estado" style="width: auto;">
+          <option value="Disponible" selected>Solo Disponibles</option>
+          <option value="">Todos los Estados</option>
+          <option value="Prestado">Prestados</option>
+          <option value="En mantenimiento">En Mantenimiento</option>
+        </select>
+
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-refrescar" title="Actualizar Catálogo">
+          <i class="bi bi-arrow-clockwise"></i> Refrescar
+        </button>
+      </div>
+    </div>
+
+    <!-- Contenedor Global de Alertas -->
+    <div id="alert-global"></div>
+
+    <!-- Tarjeta con Tabla de Equipos -->
+    <div class="card shadow-sm border-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="tabla-equipos">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" style="width: 60px;"># ID</th>
+              <th scope="col">Equipo</th>
+              <th scope="col" style="width: 140px;">Categoría</th>
+              <th scope="col">Descripción</th>
+              <th scope="col" style="width: 140px;" class="text-center">Estado</th>
+              <th scope="col" style="width: 150px;" class="text-end pe-3">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body">
+            <!-- Filas inyectadas exclusivamente con textContent mediante JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal para Solicitar Préstamo -->
+  <div class="modal fade" id="modal-prestamo" tabindex="-1" aria-labelledby="modal-prestamo-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title h6 fw-bold" id="modal-prestamo-titulo">
+            <i class="bi bi-box-seam text-primary me-2"></i>Solicitar Préstamo de Equipo
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div id="alert-modal"></div>
+
+          <div class="mb-3">
+            <label class="form-label text-muted small fw-bold text-uppercase">Equipo Seleccionado</label>
+            <div class="p-2 bg-light rounded border">
+              <strong class="d-block" id="modal-equipo-nombre">...</strong>
+              <small class="text-muted" id="modal-equipo-categoria">...</small>
+            </div>
+          </div>
+
+          <form id="form-solicitar-prestamo">
+            <input type="hidden" id="modal-equipo-id" value="">
+
+            <div class="mb-3">
+              <label for="modal-fecha-devolucion" class="form-label small fw-medium">
+                Fecha y Hora de Devolución Estimada (Máximo 30 días)
+              </label>
+              <input
+                type="datetime-local"
+                class="form-control"
+                id="modal-fecha-devolucion"
+                required
+              >
+              <div class="form-text small">
+                El centro requiere la devolución puntual para evitar sanciones automáticas por mora.
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 pt-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                Cancelar
+              </button>
+              <button type="submit" class="btn btn-primary btn-sm" id="btn-confirmar-prestamo">
+                <i class="bi bi-check-lg me-1"></i> Confirmar Solicitud
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pie de Página -->
+  <footer class="bg-white border-top py-3 text-center text-muted small mt-auto">
+    <div class="container">
+      <span>RedTec API REST &copy; 2026 • Plataforma de Recursos Tecnológicos Comunitarios</span>
+    </div>
+  </footer>
+
+  <!-- Bootstrap Bundle JS con Popper (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Script externo para estricto cumplimiento de CSP (renderiza exclusivamente con textContent) -->
+  <script src="/js/equipos.js"></script>
+</body>
+</html>

@@ -1,59 +1,50 @@
 const { Op } = require('sequelize');
-const { Prestamo, Equipo } = require('../models');
+const { Prestamo } = require('../models');
+const AppError = require('../utils/AppError');
 
 /**
- * Middleware de Sanción Automática:
- * Verifica en tiempo real si el usuario tiene préstamos vencidos no devueltos.
- * En caso afirmativo, deniega la solicitud inmediatamente con código HTTP 403 Forbidden.
+ * Middleware para la regla de negocio: Verificar Estado de Mora.
+ *
+ * REGLA DURA:
+ * Prestamo.count donde usuarioId = req.usuario.id, fechaDevolucionReal null
+ * y fechaDevolucionEsperada < ahora (Op.lt).
+ * Si count > 0 responde 403 Forbidden con mensaje claro. Aplica a todos los roles.
+ *
+ * Aprovecha el índice compuesto (usuarioId, fechaDevolucionReal) para máxima eficiencia.
  */
-module.exports = async (req, res, next) => {
+const verificarMora = async (req, res, next) => {
   try {
     if (!req.usuario) {
-      return res.status(401).json({
-        ok: false,
-        error: 'Usuario no autenticado'
-      });
+      return next(new AppError('Usuario no autenticado al evaluar mora.', 401));
     }
 
     const ahora = new Date();
 
-    const prestamosVencidos = await Prestamo.findAll({
+    const cantidadEnMora = await Prestamo.count({
       where: {
         usuarioId: req.usuario.id,
         fechaDevolucionReal: null,
         fechaDevolucionEsperada: {
           [Op.lt]: ahora
         }
-      },
-      include: [
-        {
-          model: Equipo,
-          as: 'equipo',
-          attributes: ['id', 'nombre', 'categoria']
-        }
-      ]
+      }
     });
 
-    if (prestamosVencidos.length > 0) {
-      return res.status(403).json({
-        ok: false,
-        error: 'Sanción automática activa: Tienes préstamos con fecha de devolución vencida. Debes devolver los equipos antes de solicitar uno nuevo.',
-        cantidadVencidos: prestamosVencidos.length,
-        prestamosVencidos: prestamosVencidos.map((p) => ({
-          prestamoId: p.id,
-          equipo: p.equipo ? p.equipo.nombre : `Equipo #${p.equipoId}`,
-          fechaDevolucionEsperada: p.fechaDevolucionEsperada,
-          diasDeRetraso: Math.floor((ahora - new Date(p.fechaDevolucionEsperada)) / (1000 * 60 * 60 * 24))
-        }))
-      });
+    if (cantidadEnMora > 0) {
+      return next(
+        new AppError(
+          'Sanción por mora activa: Posee préstamos con fecha de devolución vencida sin entregar. Debe regularizar su estado antes de solicitar un nuevo equipo.',
+          403
+        )
+      );
     }
 
     next();
   } catch (error) {
-    console.error('Error en middleware de mora:', error);
-    return res.status(500).json({
-      ok: false,
-      error: 'Error interno del servidor al verificar el estado de mora del usuario.'
-    });
+    next(error);
   }
+};
+
+module.exports = {
+  verificarMora
 };

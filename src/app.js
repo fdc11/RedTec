@@ -1,18 +1,21 @@
 require('dotenv').config();
 const path = require('path');
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
+const cors = require('cors');
 
-const { sequelize } = require('./models');
 const authRoutes = require('./routes/auth.routes');
 const equiposRoutes = require('./routes/equipos.routes');
 const prestamosRoutes = require('./routes/prestamos.routes');
+const AppError = require('./utils/AppError');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Configuración de Seguridad Defensiva con Helmet
+// ===================================================================
+// SEGURIDAD DEFENSIVA: HELMET Y CONTENT SECURITY POLICY (CSP)
+// REGLA DURA: Permite Bootstrap desde cdn.jsdelivr.net y PROHÍBE scripts inline.
+// Incluye Google Fonts en estilos y fuentes.
+// ===================================================================
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -20,38 +23,46 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
           'https://cdn.jsdelivr.net'
         ],
         styleSrc: [
           "'self'",
-          "'unsafe-inline'",
           'https://cdn.jsdelivr.net',
           'https://fonts.googleapis.com'
         ],
-        fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'https://images.unsplash.com']
+        fontSrc: [
+          "'self'",
+          'https://cdn.jsdelivr.net',
+          'https://fonts.gstatic.com'
+        ],
+        imgSrc: [
+          "'self'",
+          'data:'
+        ]
       }
     },
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   })
 );
 
-// Configuración de CORS Restringido
-const allowedOrigins = [
-  process.env.CLIENT_ORIGIN || 'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:3000'
-];
+// ===================================================================
+// SEGURIDAD DEFENSIVA: CORS CON LISTA BLANCA DESDE CORS_ORIGINS
+// ===================================================================
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Permitir solicitudes sin origin (como aplicaciones móviles, Postman o curl)
+      // Permite peticiones sin origen (como Postman, curl o aplicaciones móviles nativas)
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(new Error('Bloqueado por política de CORS'));
+      return callback(
+        new AppError(`Acceso denegado por política de CORS para el origen: ${origin}`, 403)
+      );
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -59,62 +70,67 @@ app.use(
   })
 );
 
-// Parseo de cuerpo de solicitudes JSON
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ===================================================================
+// PARSEO DE PETICIONES CON LÍMITE ESTRICTO DE 10KB
+// Mitiga ataques de denegación de servicio (DoS) por sobrecarga de carga útil (payload).
+// ===================================================================
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// Servir la interfaz web estática de prototipo
+// Servidor de archivos estáticos para la interfaz de usuario en public/
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Estado de salud de la API
+// Estado de salud básico
 app.get('/api/health', (req, res) => {
-  res.json({
+  res.status(200).json({
     ok: true,
-    servicio: 'RedTec API REST',
-    version: '1.0.0',
-    estado: 'Operativo',
-    timestamp: new Date().toISOString()
+    data: {
+      servicio: 'RedTec API REST',
+      version: '1.0.0',
+      estado: 'Operativo',
+      timestamp: new Date().toISOString()
+    }
   });
 });
 
-// Rutas de la API REST
+// ===================================================================
+// ENRUTADOR PRINCIPAL DE LA API
+// ===================================================================
 app.use('/api/auth', authRoutes);
 app.use('/api/equipos', equiposRoutes);
 app.use('/api/prestamos', prestamosRoutes);
 
-// Manejador para rutas no encontradas (404)
-app.use('/api/*', (req, res) => {
-  res.status(404).json({
-    ok: false,
-    error: `Endpoint '${req.originalUrl}' no encontrado en la API de RedTec.`
-  });
+// Manejador de rutas no encontradas en el prefijo /api/
+app.all('/api/*', (req, res, next) => {
+  next(new AppError(`Ruta no encontrada: ${req.method} ${req.originalUrl}`, 404));
 });
 
-// Manejador global de errores
+// ===================================================================
+// MIDDLEWARE CENTRAL DE GESTIÓN DE ERRORES
+// REGLA DURA:
+// Formato uniforme: { ok: false, error: { message, details? } }
+// Sin stack de error en entorno de producción.
+// ===================================================================
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  const status = err.status || 500;
-  res.status(status).json({
+  const statusCode = err.statusCode || (res.statusCode !== 200 ? res.statusCode : 500);
+
+  const errorResponse = {
+    message: err.message || 'Error interno del servidor.'
+  };
+
+  if (err.details) {
+    errorResponse.details = err.details;
+  }
+
+  // En desarrollo se expone el stack para diagnóstico; en producción se oculta estrictamente
+  if (process.env.NODE_ENV !== 'production' && statusCode === 500) {
+    errorResponse.stack = err.stack;
+  }
+
+  return res.status(statusCode).json({
     ok: false,
-    error: err.message || 'Error interno del servidor'
+    error: errorResponse
   });
 });
-
-// Inicio del servidor y verificación de conexión a MySQL
-if (require.main === module) {
-  sequelize
-    .authenticate()
-    .then(() => {
-      console.log('✅ Conexión a la base de datos MySQL/MariaDB establecida correctamente.');
-      app.listen(PORT, () => {
-        console.log(`🚀 Servidor RedTec ejecutándose en: http://localhost:${PORT}`);
-        console.log(`🌐 Interfaz web disponible en: http://localhost:${PORT}/`);
-      });
-    })
-    .catch((err) => {
-      console.error('❌ Error al conectar a la base de datos MySQL:', err);
-      process.exit(1);
-    });
-}
 
 module.exports = app;
