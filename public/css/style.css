@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --danger-color: #ef4444;
+  --warning-color: #f59e0b;
+  --success-color: #10b981;
+  --dark-bg: #0f172a;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f8fafc;
+  color: #1e293b;
+  min-height: 100vh;
+}
+
+.navbar {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+}
+
+.badge-estado-disponible {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-estado-prestado {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.badge-estado-mantenimiento {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.btn-quick-login {
+  transition: all 0.2s ease;
+}
+
+.btn-quick-login:hover {
+  transform: translateY(-2px);
+}
+
+.hero-banner {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: white;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  margin-bottom: 2rem;
+}
+
+.test-scenario-card {
+  border-left: 4px solid var(--primary-color);
+  background-color: #f1f5f9;
+}
+
+.test-scenario-card.danger {
+  border-left-color: var(--danger-color);
+}
+
+.test-scenario-card.warning {
+  border-left-color: var(--warning-color);
+}
+
+.test-scenario-card.success {
+  border-left-color: var(--success-color);
+}
+
+.code-badge {
+  font-family: monospace;
+  font-weight: bold;
+}
